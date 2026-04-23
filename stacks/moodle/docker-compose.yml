@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  moodle:
+    build:
+      context: /etc/komodo/repos/moodle
+      dockerfile: /root/komodo/moodle.Dockerfile
+    container_name: moodle
+    ports:
+      - "8080:80"
+    environment:
+      - MOODLE_URL=http://moodle-stg.ligjamaica.com
+      - MOODLE_DATAROOT=/var/www/moodledata
+      - MOODLE_ADMIN=admin
+      - DB_TYPE=pgsql
+      - DB_HOST=moodle-db
+      - DB_PORT=5432
+      - DB_NAME=moodle
+      - DB_USER=moodle
+      - DB_PASSWORD=${MOODLE_DB_PASSWORD:-moodlepass123}
+    volumes:
+      - moodle-data:/var/www/moodledata
+      - ./config.php:/app/config.php:ro
+    depends_on:
+      moodle-db:
+        condition: service_healthy
+    networks:
+      - moodle-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/index.php"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  moodle-db:
+    image: postgres:16-alpine
+    container_name: moodle-db
+    environment:
+      POSTGRES_DB: moodle
+      POSTGRES_USER: moodle
+      POSTGRES_PASSWORD: ${MOODLE_DB_PASSWORD:-moodlepass123}
+    volumes:
+      - moodle-db-data:/var/lib/postgresql/data
+    networks:
+      - moodle-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U moodle"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  moodle-data:
+    driver: local
+  moodle-db-data:
+    driver: local
+
+networks:
+  moodle-network:
+    driver: bridge
